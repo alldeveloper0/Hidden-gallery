@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Hidden Gallery — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<section id="adminGate" class="screen">
+  <div class="plaque">
+    <div class="eyebrow">Admin</div>
+    <h1>Hidden Gallery</h1>
+    <input id="adminPassInput" type="password" placeholder="Admin passphrase" autocomplete="off">
+    <div id="adminError"></div>
+    <button id="adminLoginBtn">Sign in</button>
+  </div>
+</section>
+
+<section id="editorScreen" style="display:none;">
+  <div id="adminToolbar">
+    <button data-cmd="bold"><b>B</b></button>
+    <button data-cmd="italic"><i>I</i></button>
+    <button data-cmd="h2">H2</button>
+    <button data-cmd="h3">H3</button>
+    <button data-cmd="p">¶</button>
+    <button id="insertImageBtn">+ Image</button>
+    <button id="insertPhaseBtn">+ Roadmap Phase</button>
+    <button id="insertPlacardBtn">+ Label</button>
+    <button id="insertRuleBtn">+ Divider</button>
+    <span class="spacer"></span>
+    <span class="note" id="saveStatus">Not saved yet</span>
+    <button id="saveBtn">Save</button>
+  </div>
+  <input type="file" id="imageFileInput" accept="image/*" style="display:none">
+
+  <div style="background:var(--bone); color:var(--ink); min-height:100vh;">
+    <div class="article-wrap">
+      <div class="a-eyebrow">The Roadmap</div>
+      <h1 class="a-title">Hidden Gallery</h1>
+      <div class="a-meta">Curated by Max Clifford</div>
+      <div id="articleBody" contenteditable="true"></div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const adminGate = document.getElementById('adminGate');
+  const editorScreen = document.getElementById('editorScreen');
+  const adminPassInput = document.getElementById('adminPassInput');
+  const adminLoginBtn = document.getElementById('adminLoginBtn');
+  const adminError = document.getElementById('adminError');
+  const articleBody = document.getElementById('articleBody');
+  const saveStatus = document.getElementById('saveStatus');
+
+  async function loadEditor(){
+    const res = await fetch('/api/content');
+    if (res.ok) {
+      const data = await res.json();
+      articleBody.innerHTML = data.html;
+    }
+    adminGate.style.display = 'none';
+    editorScreen.style.display = 'block';
+  }
+
+  async function tryLogin(){
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passphrase: adminPassInput.value })
+    });
+    if (res.ok) {
+      loadEditor();
+    } else {
+      adminError.textContent = 'Incorrect admin passphrase.';
+      adminPassInput.value = '';
+    }
+  }
+
+  adminLoginBtn.addEventListener('click', tryLogin);
+  adminPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryLogin(); });
+
+  document.querySelectorAll('#adminToolbar [data-cmd]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      articleBody.focus();
+      const cmd = btn.dataset.cmd;
+      if (cmd === 'h2' || cmd === 'h3' || cmd === 'p') {
+        document.execCommand('formatBlock', false, cmd);
+      } else {
+        document.execCommand(cmd, false, null);
+      }
+    });
+  });
+
+  document.getElementById('insertRuleBtn').addEventListener('click', () => {
+    articleBody.focus();
+    document.execCommand('insertHTML', false, '<div class="rule"></div>');
+  });
+  document.getElementById('insertPlacardBtn').addEventListener('click', () => {
+    articleBody.focus();
+    document.execCommand('insertHTML', false, '<p class="placard">LABEL</p>');
+  });
+  document.getElementById('insertPhaseBtn').addEventListener('click', () => {
+    articleBody.focus();
+    document.execCommand('insertHTML', false,
+      '<div class="phase"><div class="num">00</div><div class="body">' +
+      '<h3>Phase title</h3><p>Phase description goes here.</p></div></div>');
+  });
+
+  const imageFileInput = document.getElementById('imageFileInput');
+  document.getElementById('insertImageBtn').addEventListener('click', () => imageFileInput.click());
+  imageFileInput.addEventListener('change', async () => {
+    const file = imageFileInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('image', file);
+    saveStatus.textContent = 'Uploading image…';
+    const res = await fetch('/api/admin/upload', { method: 'POST', body: formData });
+    if (res.ok) {
+      const data = await res.json();
+      articleBody.focus();
+      document.execCommand('insertImage', false, data.url);
+      saveStatus.textContent = 'Image uploaded — not saved yet';
+    } else {
+      saveStatus.textContent = 'Image upload failed';
+    }
+    imageFileInput.value = '';
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    saveStatus.textContent = 'Saving…';
+    const res = await fetch('/api/admin/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html: articleBody.innerHTML })
+    });
+    saveStatus.textContent = res.ok ? 'Saved ✓' : 'Save failed';
+  });
+</script>
+
+</body>
+</html>

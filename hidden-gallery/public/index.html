@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Hidden Gallery</title>
+
+<!-- This tag only stops crawlers that choose to honor it. Real protection
+     here is server-side: the article text isn't sent to the browser at all
+     until a valid session cookie exists, which only happens after the
+     correct passphrase is submitted to the server. -->
+<meta name="robots" content="noindex, nofollow, noai, noimageai, noarchive">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600&family=Inter:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&family=Alex+Brush&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<section id="gate" class="screen">
+  <div class="plaque">
+    <div class="eyebrow">By Invitation Only</div>
+    <h1>The Hidden Gallery</h1>
+    <input id="passInput" type="password" placeholder="Enter the passphrase" autocomplete="off">
+    <div id="gateError"></div>
+    <button id="unlockBtn">Unlock</button>
+  </div>
+</section>
+
+<section id="cover" class="screen hidden gone">
+  <img src="/cover.jpg" alt="">
+  <div class="cover-content">
+    <div class="cover-eyebrow">A Private Viewing</div>
+    <h1>Hidden<br>Gallery</h1>
+    <p class="sub">Curated for those who already know where to look.</p>
+    <button id="enterBtn">Enter the Gallery</button>
+  </div>
+</section>
+
+<section id="titlecard" class="screen gone">
+  <div class="card-inner">
+    <div class="script">
+      Hidden Gallery
+      <small>by Max Clifford</small>
+    </div>
+  </div>
+</section>
+
+<section id="article">
+  <div class="article-wrap">
+    <div class="a-eyebrow">The Roadmap</div>
+    <h1 class="a-title">Hidden Gallery</h1>
+    <div class="a-meta">Curated by Max Clifford</div>
+    <div id="articleBody"><!-- filled from /api/content after unlock --></div>
+  </div>
+</section>
+
+<div id="spotify-embed" style="position:fixed; bottom:-200px; opacity:0; pointer-events:none;"></div>
+
+<script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
+<script>
+  let spotifyController = null;
+  window.onSpotifyIframeApiReady = (IFrameAPI) => {
+    const element = document.getElementById('spotify-embed');
+    IFrameAPI.createController(element, { uri: 'spotify:track:6Yy3QRfT2WsUXrdplVdt4h', width:'1', height:'1' }, (controller) => {
+      spotifyController = controller;
+      let hasLooped = false;
+      controller.addListener('playback_update', (e) => {
+        const { position, duration, isPaused } = e.data;
+        if (duration > 0 && position >= duration - 400) {
+          if (!hasLooped) { hasLooped = true; controller.seek(0); controller.resume(); setTimeout(() => hasLooped = false, 1000); }
+        } else if (!isPaused) { hasLooped = false; }
+      });
+    });
+  };
+
+  const passInput = document.getElementById('passInput');
+  const unlockBtn  = document.getElementById('unlockBtn');
+  const gateError  = document.getElementById('gateError');
+  const gate       = document.getElementById('gate');
+  const cover      = document.getElementById('cover');
+  const enterBtn   = document.getElementById('enterBtn');
+  const titlecard  = document.getElementById('titlecard');
+  const article    = document.getElementById('article');
+  const articleBody = document.getElementById('articleBody');
+
+  async function tryUnlock(){
+    const res = await fetch('/api/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passphrase: passInput.value })
+    });
+    if (res.ok) {
+      gate.classList.add('hidden');
+      setTimeout(() => gate.classList.add('gone'), 1000);
+      cover.classList.remove('gone');
+      requestAnimationFrame(() => cover.classList.remove('hidden'));
+      if (spotifyController) spotifyController.resume();
+
+      // Fetch the real content now that we have a valid session.
+      const contentRes = await fetch('/api/content');
+      if (contentRes.ok) {
+        const data = await contentRes.json();
+        articleBody.innerHTML = data.html;
+      }
+    } else {
+      gateError.textContent = "That passphrase doesn't match. Try again.";
+      passInput.value = '';
+    }
+  }
+
+  unlockBtn.addEventListener('click', tryUnlock);
+  passInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+
+  enterBtn.addEventListener('click', () => {
+    cover.classList.add('hidden');
+    titlecard.classList.remove('gone');
+    requestAnimationFrame(() => titlecard.classList.add('open'));
+    setTimeout(() => {
+      cover.classList.add('gone');
+      titlecard.classList.remove('open');
+      setTimeout(() => {
+        titlecard.classList.add('gone');
+        article.style.display = 'block';
+      }, 1300);
+    }, 2400);
+  });
+</script>
+
+</body>
+</html>
