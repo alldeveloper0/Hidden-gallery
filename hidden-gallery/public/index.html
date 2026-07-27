@@ -56,25 +56,11 @@
   </div>
 </section>
 
-<div id="spotify-embed" style="position:fixed; bottom:-200px; opacity:0; pointer-events:none;"></div>
+<!-- Background music: a real hosted file at /music.mp3, looping natively
+     via the loop attribute — no third-party embed, no playback cutoff. -->
+<audio id="bgMusic" src="/music.mp3" loop preload="auto"></audio>
 
-<script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
 <script>
-  let spotifyController = null;
-  window.onSpotifyIframeApiReady = (IFrameAPI) => {
-    const element = document.getElementById('spotify-embed');
-    IFrameAPI.createController(element, { uri: 'spotify:track:6Yy3QRfT2WsUXrdplVdt4h', width:'1', height:'1' }, (controller) => {
-      spotifyController = controller;
-      let hasLooped = false;
-      controller.addListener('playback_update', (e) => {
-        const { position, duration, isPaused } = e.data;
-        if (duration > 0 && position >= duration - 400) {
-          if (!hasLooped) { hasLooped = true; controller.seek(0); controller.resume(); setTimeout(() => hasLooped = false, 1000); }
-        } else if (!isPaused) { hasLooped = false; }
-      });
-    });
-  };
-
   const passInput = document.getElementById('passInput');
   const unlockBtn  = document.getElementById('unlockBtn');
   const gateError  = document.getElementById('gateError');
@@ -84,6 +70,7 @@
   const titlecard  = document.getElementById('titlecard');
   const article    = document.getElementById('article');
   const articleBody = document.getElementById('articleBody');
+  const bgMusic    = document.getElementById('bgMusic');
 
   async function tryUnlock(){
     const res = await fetch('/api/verify', {
@@ -96,7 +83,7 @@
       setTimeout(() => gate.classList.add('gone'), 1000);
       cover.classList.remove('gone');
       requestAnimationFrame(() => cover.classList.remove('hidden'));
-      if (spotifyController) spotifyController.resume();
+      bgMusic.play().catch(() => {});
 
       // Fetch the real content now that we have a valid session.
       const contentRes = await fetch('/api/content');
